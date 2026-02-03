@@ -170,9 +170,12 @@ func applyTimeSlotToRandomTime(date time.Time, config *args.Config) time.Time {
 	// Pick a random minute within the time slot
 	randMinute := timeFrom + rand.Intn(timeTo-timeFrom)
 
+	// Add random seconds (0-59)
+	randSecond := rand.Intn(60)
+
 	// Apply to the date
 	year, month, day := date.Date()
-	newDate := time.Date(year, month, day, randMinute/60, randMinute%60, 0, 0, date.Location())
+	newDate := time.Date(year, month, day, randMinute/60, randMinute%60, randSecond, 0, date.Location())
 	return newDate
 }
 

@@ -38,6 +38,7 @@ type TimeOfDay struct {
 }
 
 // NewTimeOfDay parses time string in format "9", "09", "09:00", "23:50"
+// Default values: time-from=00:00, time-to=23:59
 func NewTimeOfDay(s string) (*TimeOfDay, error) {
 	t := &TimeOfDay{}
 
@@ -88,6 +89,16 @@ func NewTimeOfDay(s string) (*TimeOfDay, error) {
 	return nil, fmt.Errorf("invalid time format: %s (expected HH or HH:MM)", s)
 }
 
+// DefaultTimeFrom returns default TimeOfDay (00:00)
+func DefaultTimeFrom() *TimeOfDay {
+	return &TimeOfDay{Hour: 0, Minute: 0}
+}
+
+// DefaultTimeTo returns default TimeOfDay (23:59)
+func DefaultTimeTo() *TimeOfDay {
+	return &TimeOfDay{Hour: 23, Minute: 59}
+}
+
 // IsZero returns true if time is not set
 func (t *TimeOfDay) IsZero() bool {
 	return t == nil
@@ -125,11 +136,20 @@ func (c *Config) Validate() error {
 }
 
 // ValidateTimeRanges validates time slot constraints
+// Returns default values if not set
 func (c *Config) ValidateTimeRanges() error {
-	if !c.TimeFrom.IsZero() && !c.TimeTo.IsZero() {
-		if c.TimeFrom.Hour*60+c.TimeFrom.Minute >= c.TimeTo.Hour*60+c.TimeTo.Minute {
-			return fmt.Errorf("--time-from must be before --time-to")
-		}
+	timeFrom := c.TimeFrom
+	timeTo := c.TimeTo
+
+	if timeFrom == nil {
+		timeFrom = DefaultTimeFrom()
+	}
+	if timeTo == nil {
+		timeTo = DefaultTimeTo()
+	}
+
+	if timeFrom.Hour*60+timeFrom.Minute >= timeTo.Hour*60+timeTo.Minute {
+		return fmt.Errorf("--time-from must be before --time-to")
 	}
 	return nil
 }
