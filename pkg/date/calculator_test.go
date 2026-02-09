@@ -42,9 +42,9 @@ func TestDetermineDateRange_NoDatesProvided(t *testing.T) {
 	start, end := determineDateRange(commits, config)
 
 	expectedStart := mustParseTime("2023-01-01")
-	expectedStart = &time.Time{Time: expectedStart.Time.Add(10 * time.Hour)} // 10:00
+	*expectedStart = time.Date(expectedStart.Year(), expectedStart.Month(), expectedStart.Day(), 10, 0, 0, 0, expectedStart.Location()) // 10:00
 	expectedEnd := mustParseTime("2023-12-31")
-	expectedEnd = &time.Time{Time: expectedEnd.Time.Add(23 * time.Hour)} // 23:00
+	*expectedEnd = time.Date(expectedEnd.Year(), expectedEnd.Month(), expectedEnd.Day(), 23, 0, 0, 0, expectedEnd.Location()) // 23:00
 
 	if start.Unix() != expectedStart.Unix() {
 		t.Errorf("start = %v, want %v", start, expectedStart)
@@ -237,5 +237,7 @@ func mustParseTime(s string) *time.Time {
 	if err != nil {
 		panic(err)
 	}
+	// Set the time to midnight for consistent testing
+	t = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 	return &t
 }

@@ -70,6 +70,11 @@ func NewTimeOfDay(s string) (*TimeOfDay, error) {
 		hourStr := s[:colonPos]
 		minuteStr := s[colonPos+1:]
 
+		// Check that minuteStr ends at the string (no extra chars like 'am', 'pm')
+		if len(minuteStr) > 2 {
+			return nil, fmt.Errorf("invalid time format: %s (expected HH or HH:MM)", s)
+		}
+
 		var hour, minute int
 		_, err := fmt.Sscanf(hourStr+" "+minuteStr, "%d %d", &hour, &minute)
 		if err != nil {

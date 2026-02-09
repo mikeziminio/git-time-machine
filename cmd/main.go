@@ -92,6 +92,12 @@ func run() error {
 		return nil
 	}
 
+	// Check for -i only mode (information mode)
+	if input != "" && output == "" {
+		return printRepoInfo(input)
+	}
+
+	// Check required flags
 	if input == "" {
 		return fmt.Errorf("required flag -i is missing")
 	}
@@ -311,6 +317,50 @@ func (p *Processor) writeRewrittenCommits() error {
 			)
 		}
 	}
+
+	return nil
+}
+
+func printRepoInfo(inputDir string) error {
+	reader := git.NewReader(inputDir)
+	branches, err := reader.GetBranches()
+	if err != nil {
+		return fmt.Errorf("failed to read repository: %w", err)
+	}
+
+	var totalCommits int
+	daysMap := make(map[string]bool)
+
+	for _, branch := range branches {
+		commits := branch.Commits
+		for i, j := 0, len(commits)-1; i < j; i, j = i+1, j-1 {
+			commits[i], commits[j] = commits[j], commits[i]
+		}
+
+		for _, commit := range commits {
+			totalCommits++
+			if !commit.DateParsed.IsZero() {
+				day := commit.DateParsed.Format("2006-01-02")
+				daysMap[day] = true
+			}
+		}
+	}
+
+	fmt.Println("Repository Information:")
+	fmt.Printf("  Commits: %d   Days: %d\n", totalCommits, len(daysMap))
+
+	fmt.Println("\nOriginal commits:")
+	for _, branch := range branches {
+		fmt.Printf("\nBranch: %s\n", branch.Name)
+		for i, commit := range branch.Commits {
+			fmt.Printf("  %d. SHA: %s\n", i+1, commit.SHA)
+			fmt.Printf("     Author: %s <%s>\n", commit.Author, commit.Email)
+			fmt.Printf("     Date: %s\n", commit.Date)
+			fmt.Printf("     Message: %s\n", commit.Message)
+		}
+	}
+
+	fmt.Println("\nFlags will be ignored, as -o is missing")
 
 	return nil
 }
