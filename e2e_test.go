@@ -222,3 +222,170 @@ func TestAuthorAndEmail(t *testing.T) {
 		t.Errorf("Email not changed")
 	}
 }
+
+func TestInfoModeOnlyInput(t *testing.T) {
+	inputDir := "testdata/project-simple"
+
+	// Run with only -i flag (no -o)
+	cmd := exec.Command("./git-time-machine", "-i", inputDir)
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	
+	// Should not be an error
+	if err != nil {
+		t.Fatalf("Should not error with only -i flag. Output: %s", string(output))
+	}
+	
+	outputStr := string(output)
+	
+	// Check for repository info header
+	if !strings.Contains(outputStr, "Repository Information:") {
+		t.Errorf("Should show repository information header")
+	}
+	
+	// Check for commit count
+	if !strings.Contains(outputStr, "Commits:") {
+		t.Errorf("Should show commit count")
+	}
+	
+	// Check for original commits section
+	if !strings.Contains(outputStr, "Original commits:") {
+		t.Errorf("Should show original commits")
+	}
+	
+	// Check for warning about ignored flags
+	if !strings.Contains(outputStr, "Flags will be ignored, as -o is missing") {
+		t.Errorf("Should warn about ignored flags")
+	}
+	
+	// Check that no output repo was created
+	// (we can't easily check this in temp dir, but we verified no error)
+}
+
+func TestInfoModeWithOtherFlags(t *testing.T) {
+	inputDir := "testdata/project-simple"
+
+	// Run with -i and other flags but no -o
+	cmd := exec.Command("./git-time-machine", "-i", inputDir, "--user-name", "Test User", "--date-from", "2023-01-01")
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	
+	// Should not be an error - flags should be ignored
+	if err != nil {
+		t.Fatalf("Should not error with -i only. Output: %s", string(output))
+	}
+	
+	outputStr := string(output)
+	
+	// Should still show info mode output
+	if !strings.Contains(outputStr, "Repository Information:") {
+		t.Errorf("Should show repository information")
+	}
+	
+	// Should warn about ignored flags
+	if !strings.Contains(outputStr, "Flags will be ignored, as -o is missing") {
+		t.Errorf("Should warn about ignored flags")
+	}
+}
+
+func TestNoFlagsShowsHelp(t *testing.T) {
+	cmd := exec.Command("./git-time-machine")
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	
+	// Should not be an error when no flags
+	if err != nil {
+		t.Fatalf("Should not error with no flags. Output: %s", string(output))
+	}
+	
+	outputStr := string(output)
+	
+	// Should show help
+	if !strings.Contains(outputStr, "Git Time Machine") {
+		t.Errorf("Should show help message")
+	}
+}
+
+func TestMissingRequiredFlagWithError(t *testing.T) {
+	outputDir := "/tmp/test-output-error"
+	os.RemoveAll(outputDir)
+
+	// Run with only -o (missing -i)
+	cmd := exec.Command("./git-time-machine", "-o", outputDir)
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	
+	// Should be an error
+	if err == nil {
+		t.Error("Should error when -i is missing")
+	}
+	
+	outputStr := string(output)
+	
+	// Should show error message
+	if !strings.Contains(outputStr, "Error:") {
+		t.Errorf("Should show error message")
+	}
+	
+	// Should show required flag -i is missing
+	if !strings.Contains(outputStr, "-i is missing") {
+		t.Errorf("Should mention -i is required")
+	}
+}
+
+func TestInvalidPathShowsErrorAndHelp(t *testing.T) {
+	outputDir := "/tmp/test-output-invalid-help"
+	os.RemoveAll(outputDir)
+
+	// Run with invalid input path
+	cmd := exec.Command("./git-time-machine", "-i", "/nonexistent/path", "-o", outputDir)
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	
+	// Should be an error
+	if err == nil {
+		t.Error("Should error with invalid input path")
+	}
+	
+	outputStr := string(output)
+	
+	// Should show error
+	if !strings.Contains(outputStr, "Error:") {
+		t.Errorf("Should show error message")
+	}
+	
+	// Should show help after error
+	if !strings.Contains(outputStr, "Usage:") {
+		t.Errorf("Should show help after error")
+	}
+}
+
+func TestNormalModeBothFlags(t *testing.T) {
+	inputDir := "testdata/project-simple"
+	outputDir := "/tmp/test-output-normal"
+	os.RemoveAll(outputDir)
+
+	err := runGitTimeMachine(t, inputDir, outputDir)
+	if err != nil {
+		t.Fatalf("Failed with both flags: %v", err)
+	}
+	
+	// Should not show info mode output
+	cmd := exec.Command("cat", outputDir+"/git-time-machine.log")
+	cmd.Dir = "."
+	_, err = cmd.CombinedOutput()
+	// Just need to verify the output dir was created and has a git repo
+	
+	// Check that git repo exists and has commits
+	gitLogCmd := exec.Command("git", "log", "--oneline")
+	gitLogCmd.Dir = outputDir
+	output, err := gitLogCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to get git log from output: %v", err)
+	}
+	
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) == 0 || lines[0] == "" {
+		t.Error("Output repo should have commits")
+	}
+}

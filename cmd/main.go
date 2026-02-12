@@ -16,7 +16,8 @@ var config *args.Config
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
+		printHelp()
 		os.Exit(1)
 	}
 }
@@ -88,6 +89,12 @@ func run() error {
 	}
 
 	if help {
+		printHelp()
+		return nil
+	}
+
+	// Check if no flags were provided at all
+	if input == "" && output == "" {
 		printHelp()
 		return nil
 	}
