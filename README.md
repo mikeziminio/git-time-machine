@@ -53,7 +53,35 @@ git-time-machine [flags]
 | `-q, --quiet` | Quiet mode (compact output only) |
 | `--help` | Display help message |
 
+### Information Mode
+
+If you specify only `-i` (without `-o`), the tool shows information about the repository without rewriting:
+
+```bash
+git-time-machine -i /path/to/input/repo
+```
+
+This displays:
+- Repository information (number of commits and unique days)
+- List of all original commits with their details
+- A warning that flags will be ignored since `-o` is missing
+
+This mode is useful for inspecting a repository before deciding how to rewrite it. All other flags are ignored in this mode.
+
 ## Examples
+
+### Information Mode (View Repository Info)
+
+View repository information without rewriting:
+
+```bash
+git-time-machine -i /path/to/input/repo
+```
+
+This shows:
+- Repository summary (commits and days)
+- All original commits with their details
+- Warning that flags are ignored (requires `-o` for rewriting)
 
 ### Basic Author Rewrite
 
