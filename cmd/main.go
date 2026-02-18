@@ -85,6 +85,10 @@ func run() error {
 		} else if arg == "--help" || arg == "-help" {
 			help = true
 			break
+		} else if arg[0] == '-' {
+			return fmt.Errorf("Unknown flag: %s", arg)
+		} else {
+			return fmt.Errorf("Unknown argument: %s (did you forget '-i' or '--input'?)", arg)
 		}
 	}
 
