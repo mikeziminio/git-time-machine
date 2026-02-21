@@ -4,6 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"git-time-machine/pkg/args"
 	"git-time-machine/pkg/git"
 )
@@ -23,12 +26,8 @@ func TestDetermineDateRange_BothDatesProvided(t *testing.T) {
 	expectedStart := mustParseTime("2023-01-01")
 	expectedEnd := mustParseTime("2023-12-31")
 
-	if start.Unix() != expectedStart.Unix() {
-		t.Errorf("start = %v, want %v", start, expectedStart)
-	}
-	if end.Unix() != expectedEnd.Unix() {
-		t.Errorf("end = %v, want %v", end, expectedEnd)
-	}
+	assert.Equal(t, expectedStart.Unix(), start.Unix())
+	assert.Equal(t, expectedEnd.Unix(), end.Unix())
 }
 
 func TestDetermineDateRange_NoDatesProvided(t *testing.T) {
@@ -42,16 +41,12 @@ func TestDetermineDateRange_NoDatesProvided(t *testing.T) {
 	start, end := determineDateRange(commits, config)
 
 	expectedStart := mustParseTime("2023-01-01")
-	*expectedStart = time.Date(expectedStart.Year(), expectedStart.Month(), expectedStart.Day(), 10, 0, 0, 0, expectedStart.Location()) // 10:00
+	*expectedStart = time.Date(expectedStart.Year(), expectedStart.Month(), expectedStart.Day(), 10, 0, 0, 0, expectedStart.Location())
 	expectedEnd := mustParseTime("2023-12-31")
-	*expectedEnd = time.Date(expectedEnd.Year(), expectedEnd.Month(), expectedEnd.Day(), 23, 0, 0, 0, expectedEnd.Location()) // 23:00
+	*expectedEnd = time.Date(expectedEnd.Year(), expectedEnd.Month(), expectedEnd.Day(), 23, 0, 0, 0, expectedEnd.Location())
 
-	if start.Unix() != expectedStart.Unix() {
-		t.Errorf("start = %v, want %v", start, expectedStart)
-	}
-	if end.Unix() != expectedEnd.Unix() {
-		t.Errorf("end = %v, want %v", end, expectedEnd)
-	}
+	assert.Equal(t, expectedStart.Unix(), start.Unix())
+	assert.Equal(t, expectedEnd.Unix(), end.Unix())
 }
 
 func TestDetermineDateRange_OnlyDateFrom(t *testing.T) {
@@ -67,14 +62,9 @@ func TestDetermineDateRange_OnlyDateFrom(t *testing.T) {
 	start, end := determineDateRange(commits, config)
 
 	expectedStart := mustParseTime("2023-01-01")
-	// end should be the last commit date
 
-	if start.Unix() != expectedStart.Unix() {
-		t.Errorf("start = %v, want %v", start, expectedStart)
-	}
-	if end.IsZero() {
-		t.Error("end should not be zero")
-	}
+	assert.Equal(t, expectedStart.Unix(), start.Unix())
+	assert.False(t, end.IsZero())
 }
 
 func TestDetermineDateRange_OnlyDateTo(t *testing.T) {
@@ -90,14 +80,9 @@ func TestDetermineDateRange_OnlyDateTo(t *testing.T) {
 	start, end := determineDateRange(commits, config)
 
 	expectedEnd := mustParseTime("2023-12-31")
-	// start should be the first commit date
 
-	if end.Unix() != expectedEnd.Unix() {
-		t.Errorf("end = %v, want %v", end, expectedEnd)
-	}
-	if start.IsZero() {
-		t.Error("start should not be zero")
-	}
+	assert.Equal(t, expectedEnd.Unix(), end.Unix())
+	assert.False(t, start.IsZero())
 }
 
 func TestCalculateNewDates_SingleCommit(t *testing.T) {
@@ -112,25 +97,16 @@ func TestCalculateNewDates_SingleCommit(t *testing.T) {
 
 	newDates, err := CalculateNewDates(commits, config)
 
-	if err != nil {
-		t.Fatalf("CalculateNewDates() error = %v", err)
-	}
-
-	if len(newDates) != 1 {
-		t.Errorf("Expected 1 date, got %d", len(newDates))
-	}
-
-	date := newDates[0]
-	if date.IsZero() {
-		t.Error("Date should not be zero")
-	}
+	require.NoError(t, err)
+	assert.Len(t, newDates, 1)
+	assert.False(t, newDates[0].IsZero())
 }
 
 func TestCalculateNewDates_MinInterval(t *testing.T) {
 	config := &args.Config{
 		DateFrom:    mustParseTime("2023-01-01"),
 		DateTo:      mustParseTime("2023-01-03"),
-		MinInterval: 24, // 24 hours
+		MinInterval: 24,
 	}
 
 	commits := []git.Commit{
@@ -141,20 +117,12 @@ func TestCalculateNewDates_MinInterval(t *testing.T) {
 
 	newDates, err := CalculateNewDates(commits, config)
 
-	if err != nil {
-		t.Fatalf("CalculateNewDates() error = %v", err)
-	}
+	require.NoError(t, err)
+	assert.Len(t, newDates, 3)
 
-	if len(newDates) != 3 {
-		t.Fatalf("Expected 3 dates, got %d", len(newDates))
-	}
-
-	// Check that dates are at least 24 hours apart
 	for i := 1; i < len(newDates); i++ {
 		diff := newDates[i].Sub(newDates[i-1]).Hours()
-		if diff < 24 {
-			t.Errorf("Interval of %.1f hours is less than required 24 hours", diff)
-		}
+		assert.GreaterOrEqual(t, diff, float64(24), "Interval should be at least 24 hours")
 	}
 }
 
@@ -162,7 +130,7 @@ func TestCalculateNewDates_ImpossibleDistribution(t *testing.T) {
 	config := &args.Config{
 		DateFrom:    mustParseTime("2023-01-01"),
 		DateTo:      mustParseTime("2023-01-02"),
-		MinInterval: 48, // 48 hours
+		MinInterval: 48,
 	}
 
 	commits := []git.Commit{
@@ -172,9 +140,7 @@ func TestCalculateNewDates_ImpossibleDistribution(t *testing.T) {
 
 	_, err := CalculateNewDates(commits, config)
 
-	if err == nil {
-		t.Error("Expected error for impossible distribution")
-	}
+	assert.Error(t, err)
 }
 
 func TestCalculateNewDates_TimeSlot(t *testing.T) {
@@ -192,16 +158,12 @@ func TestCalculateNewDates_TimeSlot(t *testing.T) {
 
 	newDates, err := CalculateNewDates(commits, config)
 
-	if err != nil {
-		t.Fatalf("CalculateNewDates() error = %v", err)
-	}
+	require.NoError(t, err)
 
-	// Check that all times are within 10:00-12:00
 	for _, date := range newDates {
 		hour := date.Hour()
-		if hour < 10 || hour >= 12 {
-			t.Errorf("Time %d:00 is outside 10:00-12:00 slot", hour)
-		}
+		assert.GreaterOrEqual(t, hour, 10, "Hour should be >= 10")
+		assert.Less(t, hour, 12, "Hour should be < 12")
 	}
 }
 
@@ -219,25 +181,18 @@ func TestCalculateNewDates_ChronologicalOrder(t *testing.T) {
 
 	newDates, err := CalculateNewDates(commits, config)
 
-	if err != nil {
-		t.Fatalf("CalculateNewDates() error = %v", err)
-	}
+	require.NoError(t, err)
 
-	// Check that dates are in chronological order
 	for i := 1; i < len(newDates); i++ {
-		if newDates[i].Before(newDates[i-1]) {
-			t.Errorf("Date %v is before previous date %v", newDates[i], newDates[i-1])
-		}
+		assert.False(t, newDates[i].Before(newDates[i-1]), "Dates should be in chronological order")
 	}
 }
 
-// Helper function to parse time
 func mustParseTime(s string) *time.Time {
 	t, err := time.Parse("2006-01-02", s)
 	if err != nil {
 		panic(err)
 	}
-	// Set the time to midnight for consistent testing
 	t = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 	return &t
 }

@@ -2,8 +2,10 @@ package writer
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -103,7 +105,7 @@ func (w *Writer) CreateCommit(author, email string, date time.Time, message stri
 	}
 
 	sha := strings.TrimSpace(string(output))
-	
+
 	if !w.quiet {
 		fmt.Printf("Created commit: %s (author: %s <%s>, date: %s)\n", sha[:7], author, email, date.Format("2006-01-02 15:04:05"))
 	}
@@ -133,4 +135,53 @@ func (w *Writer) CreateTag(tagName, commitSHA string) error {
 	}
 
 	return nil
+}
+
+// CopyFiles copies all files from inputDir to outputDir except .git folder
+func (w *Writer) CopyFiles(inputDir string) error {
+	return filepath.Walk(inputDir, func(srcPath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(inputDir, srcPath)
+		if err != nil {
+			return err
+		}
+
+		if relPath == "." {
+			return nil
+		}
+
+		parts := strings.Split(relPath, string(filepath.Separator))
+		for _, part := range parts {
+			if part == ".git" {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+		}
+
+		dstPath := filepath.Join(w.outputDir, relPath)
+
+		if info.IsDir() {
+			return os.MkdirAll(dstPath, info.Mode())
+		}
+
+		srcFile, err := os.Open(srcPath)
+		if err != nil {
+			return err
+		}
+		defer srcFile.Close()
+
+		dstFile, err := os.Create(dstPath)
+		if err != nil {
+			return err
+		}
+		defer dstFile.Close()
+
+		_, err = io.Copy(dstFile, srcFile)
+		return err
+	})
 }

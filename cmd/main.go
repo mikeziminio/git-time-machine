@@ -3,192 +3,15 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
+
+	"github.com/spf13/cobra"
 
 	"git-time-machine/pkg/args"
-	"git-time-machine/pkg/git"
 	"git-time-machine/pkg/date"
+	"git-time-machine/pkg/git"
 	"git-time-machine/pkg/writer"
 )
 
-// Global config for the run
-var config *args.Config
-
-func main() {
-	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
-		printHelp()
-		os.Exit(1)
-	}
-}
-
-func run() error {
-	// Define flags
-	var input, output, userName, userEmail, dateFromStr, dateToStr, timeFromStr, timeToStr string
-	var minInterval int
-	var quiet, help bool
-
-	// Parse manually
-	cmdArgs := os.Args[1:]
-	for i := 0; i < len(cmdArgs); i++ {
-		arg := cmdArgs[i]
-		if arg == "-i" || arg == "--input" {
-			if i+1 < len(cmdArgs) {
-				input = cmdArgs[i+1]
-				i++
-			}
-		} else if arg == "-o" || arg == "--output" {
-			if i+1 < len(cmdArgs) {
-				output = cmdArgs[i+1]
-				i++
-			}
-		} else if arg == "--user-name" {
-			if i+1 < len(cmdArgs) {
-				userName = cmdArgs[i+1]
-				i++
-			}
-		} else if arg == "--user-email" {
-			if i+1 < len(cmdArgs) {
-				userEmail = cmdArgs[i+1]
-				i++
-			}
-		} else if arg == "--date-from" {
-			if i+1 < len(cmdArgs) {
-				dateFromStr = cmdArgs[i+1]
-				i++
-			}
-		} else if arg == "--date-to" {
-			if i+1 < len(cmdArgs) {
-				dateToStr = cmdArgs[i+1]
-				i++
-			}
-		} else if arg == "--time-from" {
-			if i+1 < len(cmdArgs) {
-				timeFromStr = cmdArgs[i+1]
-				i++
-			}
-		} else if arg == "--time-to" {
-			if i+1 < len(cmdArgs) {
-				timeToStr = cmdArgs[i+1]
-				i++
-			}
-		} else if arg == "--min-interval" {
-			if i+1 < len(cmdArgs) {
-				_, err := fmt.Sscanf(cmdArgs[i+1], "%d", &minInterval)
-				if err != nil {
-					return fmt.Errorf("Invalid min-interval: %v", err)
-				}
-				i++
-			}
-		} else if arg == "-q" || arg == "--quiet" {
-			quiet = true
-		} else if arg == "--help" || arg == "-help" {
-			help = true
-			break
-		} else if arg[0] == '-' {
-			return fmt.Errorf("Unknown flag: %s", arg)
-		} else {
-			return fmt.Errorf("Unknown argument: %s (did you forget '-i' or '--input'?)", arg)
-		}
-	}
-
-	if help {
-		printHelp()
-		return nil
-	}
-
-	// Check if no flags were provided at all
-	if input == "" && output == "" {
-		printHelp()
-		return nil
-	}
-
-	// Check for -i only mode (information mode)
-	if input != "" && output == "" {
-		return printRepoInfo(input)
-	}
-
-	// Check required flags
-	if input == "" {
-		return fmt.Errorf("required flag -i is missing")
-	}
-	if output == "" {
-		return fmt.Errorf("required flag -o is missing")
-	}
-
-	// Parse optional flags
-	var DateFrom, DateTo *time.Time
-
-	if dateFromStr != "" {
-		t, err := args.ParseDate(dateFromStr)
-		if err != nil {
-			return fmt.Errorf("Error parsing date-from: %v", err)
-		}
-		DateFrom = t
-	}
-
-	if dateToStr != "" {
-		t, err := args.ParseDate(dateToStr)
-		if err != nil {
-			return fmt.Errorf("Error parsing date-to: %v", err)
-		}
-		DateTo = t
-	}
-
-	// Create config
-	config = &args.Config{
-		InputDir:    input,
-		OutputDir:   output,
-		Quiet:       quiet,
-		UserName:    userName,
-		UserEmail:   userEmail,
-		MinInterval: minInterval,
-		DateFrom:    DateFrom,
-		DateTo:      DateTo,
-	}
-
-	// Set time slots
-	if timeFromStr != "" {
-		t, err := args.NewTimeOfDay(timeFromStr)
-		if err != nil {
-			return fmt.Errorf("Error parsing time-from: %v", err)
-		}
-		config.TimeFrom = t
-	}
-
-	if timeToStr != "" {
-		t, err := args.NewTimeOfDay(timeToStr)
-		if err != nil {
-			return fmt.Errorf("Error parsing time-to: %v", err)
-		}
-		config.TimeTo = t
-	}
-
-	// Run processor
-	p := &Processor{config: config}
-	return p.Run()
-}
-
-func printHelp() {
-	fmt.Println("Git Time Machine - Rewrite Git history with custom dates and authors")
-	fmt.Println()
-	fmt.Println("Usage: git-time-machine [flags]")
-	fmt.Println()
-	fmt.Println("Flags:")
-	fmt.Println("  -i, --input string           Input Git repository directory (required)")
-	fmt.Println("  -o, --output string          Output directory for rewritten repository (required)")
-	fmt.Println("      --user-name string       New author name for all commits")
-	fmt.Println("      --user-email string      New author email for all commits")
-	fmt.Println("      --date-from string       Start date for rewriting (format: 2006-01-02 or 2006-01-02T15:04:05)")
-	fmt.Println("      --date-to string         End date for rewriting (format: 2006-01-02 or 2006-01-02T15:04:05)")
-	fmt.Println("      --time-from string       Start time for time slot filtering (format: 9, 09, 09:00, 23:50)")
-	fmt.Println("      --time-to string         End time for time slot filtering (format: 9, 09, 09:00, 23:50)")
-	fmt.Println("      --min-interval int       Minimum interval between commits in hours (integer)")
-	fmt.Println("  -q, --quiet                  Quiet mode (compact output)")
-	fmt.Println("      --help                   Display help message")
-}
-
-// Processor manages the git history rewriting process
 type Processor struct {
 	config       *args.Config
 	reader       *git.Reader
@@ -197,27 +20,26 @@ type Processor struct {
 }
 
 func (p *Processor) Run() error {
-	// 1. Read input repo
 	if err := p.readInputRepo(); err != nil {
 		return err
 	}
 
-	// 2. Calculate new dates
 	if err := p.calculateNewDates(); err != nil {
 		return err
 	}
 
-	// 3. Create output repo
 	if err := p.createOutputRepo(); err != nil {
 		return err
 	}
 
-	// 4. Write commits
 	if err := p.writeRewrittenCommits(); err != nil {
 		return err
 	}
 
-	// 5. Output summary
+	if err := p.copyFiles(); err != nil {
+		return err
+	}
+
 	if err := p.printOutputSummary(); err != nil {
 		return err
 	}
@@ -232,13 +54,11 @@ func (p *Processor) readInputRepo() error {
 		return fmt.Errorf("failed to read repository: %w", err)
 	}
 
-	// Collect all commits (git log is newest to oldest, we need oldest to newest)
 	var totalCommits int
 	daysMap := make(map[string]bool)
 
 	for _, branch := range branches {
 		commits := branch.Commits
-		// Reverse commits to get oldest first
 		for i, j := 0, len(commits)-1; i < j; i, j = i+1, j-1 {
 			commits[i], commits[j] = commits[j], commits[i]
 		}
@@ -256,7 +76,6 @@ func (p *Processor) readInputRepo() error {
 	fmt.Printf("Input repository summary:\n")
 	fmt.Printf("  Commits: %d   Days: %d\n", totalCommits, len(daysMap))
 
-	// Show commits if not quiet
 	if !p.config.Quiet {
 		fmt.Println("\nOriginal commits:")
 		for _, branch := range branches {
@@ -283,7 +102,6 @@ func (p *Processor) calculateNewDates() error {
 		return err
 	}
 
-	// Store new dates with commits
 	for i := range p.commits {
 		p.commits[i].NewDate = newDates[i]
 	}
@@ -291,17 +109,16 @@ func (p *Processor) calculateNewDates() error {
 }
 
 func (p *Processor) createOutputRepo() error {
-	writer := writer.NewWriter(p.config.OutputDir, p.config.Quiet)
-	if err := writer.InitRepository(); err != nil {
+	w := writer.NewWriter(p.config.OutputDir, p.config.Quiet)
+	if err := w.InitRepository(); err != nil {
 		return err
 	}
-	p.outputWriter = writer
+	p.outputWriter = w
 	return nil
 }
 
 func (p *Processor) writeRewrittenCommits() error {
 	for i, commit := range p.commits {
-		// Apply author changes if specified
 		author := commit.Author
 		email := commit.Email
 		if p.config.UserName != "" {
@@ -316,7 +133,6 @@ func (p *Processor) writeRewrittenCommits() error {
 			return fmt.Errorf("failed to create commit %d: %w", i+1, err)
 		}
 
-		// Store mapping
 		if !p.config.Quiet {
 			fmt.Printf("%s --> %s (author: %s / %s, date: %s --> %s)\n",
 				commit.SHA[:12],
@@ -328,6 +144,29 @@ func (p *Processor) writeRewrittenCommits() error {
 			)
 		}
 	}
+
+	return nil
+}
+
+func (p *Processor) copyFiles() error {
+	if err := p.outputWriter.CopyFiles(p.config.InputDir); err != nil {
+		return fmt.Errorf("failed to copy files: %w", err)
+	}
+	return nil
+}
+
+func (p *Processor) printOutputSummary() error {
+	daysMap := make(map[string]bool)
+	for _, commit := range p.commits {
+		if commit.NewDate.IsZero() {
+			continue
+		}
+		day := commit.NewDate.Format("2006-01-02")
+		daysMap[day] = true
+	}
+
+	fmt.Printf("\nOutput repository summary:\n")
+	fmt.Printf("  Commits: %d   Days: %d\n", len(p.commits), len(daysMap))
 
 	return nil
 }
@@ -376,19 +215,97 @@ func printRepoInfo(inputDir string) error {
 	return nil
 }
 
-func (p *Processor) printOutputSummary() error {
-	// Count output commits and days
-	daysMap := make(map[string]bool)
-	for _, commit := range p.commits {
-		if commit.NewDate.IsZero() {
-			continue
-		}
-		day := commit.NewDate.Format("2006-01-02")
-		daysMap[day] = true
+func main() {
+	config := &args.Config{}
+
+	// Set default time range
+	defaultTimeFrom, _ := args.NewTimeOfDay("19:00")
+	defaultTimeTo, _ := args.NewTimeOfDay("23:59")
+	config.TimeFrom = defaultTimeFrom
+	config.TimeTo = defaultTimeTo
+
+	cmd := &cobra.Command{
+		Use:   "git-time-machine",
+		Short: "Git Time Machine - Rewrite Git history with custom dates and authors",
+		Long: `Git Time Machine is a CLI tool that rewrites Git history by:
+   - Changing author names and emails
+   - Redistributing commits across custom date ranges
+   - Applying time slot constraints`,
+		Example: `  git-time-machine -i ./my-repo -o ./rewritten-repo --user-name "John Doe" --user-email "john@example.com"
+  git-time-machine -i ./my-repo -o ./rewritten-repo --date-from 2023-01-01 --date-to 2023-12-31
+  git-time-machine -i ./my-repo -o ./rewritten-repo --time-from 9 --time-to 18 --min-interval 2`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if config.Help {
+				cmd.Usage()
+				return nil
+			}
+
+			if config.InputDir == "" && config.OutputDir == "" {
+				return cmd.Help()
+			}
+
+			if config.InputDir != "" && config.OutputDir == "" {
+				return printRepoInfo(config.InputDir)
+			}
+
+			if err := config.Validate(); err != nil {
+				return err
+			}
+
+			if err := config.ValidateTimeRanges(); err != nil {
+				return err
+			}
+
+			if err := config.ValidateInterval(); err != nil {
+				return err
+			}
+
+			p := &Processor{config: config}
+			return p.Run()
+		},
 	}
 
-	fmt.Printf("\nOutput repository summary:\n")
-	fmt.Printf("  Commits: %d   Days: %d\n", len(p.commits), len(daysMap))
+	cmd.Flags().StringVarP(&config.InputDir, "input", "i", "", "Input Git repository directory (required)")
+	cmd.Flags().StringVarP(&config.OutputDir, "output", "o", "", "Output directory for rewritten repository (required)")
+	cmd.Flags().StringVar(&config.UserName, "user-name", "Mike Zimin", "New author name for all commits")
+	cmd.Flags().StringVar(&config.UserEmail, "user-email", "mikeziminio@gmail.com", "New author email for all commits")
+	cmd.Flags().Func("date-from", "Start date for rewriting (format: 2006-01-02 or 2006-01-02T15:04:05)", func(s string) error {
+		t, err := args.ParseDate(s)
+		if err != nil {
+			return err
+		}
+		config.DateFrom = t
+		return nil
+	})
+	cmd.Flags().Func("date-to", "End date for rewriting (format: 2006-01-02 or 2006-01-02T15:04:05)", func(s string) error {
+		t, err := args.ParseDate(s)
+		if err != nil {
+			return err
+		}
+		config.DateTo = t
+		return nil
+	})
+	cmd.Flags().Func("time-from", "Start time for time slot filtering (format: 9, 09, 09:00, 23:50)", func(s string) error {
+		t, err := args.NewTimeOfDay(s)
+		if err != nil {
+			return err
+		}
+		config.TimeFrom = t
+		return nil
+	})
+	cmd.Flags().Func("time-to", "End time for time slot filtering (format: 9, 09, 09:00, 23:50, default: 23)", func(s string) error {
+		t, err := args.NewTimeOfDay(s)
+		if err != nil {
+			return err
+		}
+		config.TimeTo = t
+		return nil
+	})
+	cmd.Flags().IntVar(&config.MinInterval, "min-interval", 0, "Minimum interval between commits in hours (integer)")
+	cmd.Flags().BoolVarP(&config.Quiet, "quiet", "q", false, "Quiet mode (compact output)")
+	cmd.Flags().BoolVar(&config.Help, "help", false, "Display help message")
 
-	return nil
+	if err := cmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }

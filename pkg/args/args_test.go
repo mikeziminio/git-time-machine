@@ -3,6 +3,9 @@ package args
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewTimeOfDay_HourOnly(t *testing.T) {
@@ -26,16 +29,13 @@ func TestNewTimeOfDay_HourOnly(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := NewTimeOfDay(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewTimeOfDay() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				require.Error(t, err)
 				return
 			}
-			if err != nil {
-				return
-			}
-			if result.Hour != tt.hour || result.Minute != tt.minute {
-				t.Errorf("NewTimeOfDay() = (%d, %d), want (%d, %d)", result.Hour, result.Minute, tt.hour, tt.minute)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.hour, result.Hour)
+			assert.Equal(t, tt.minute, result.Minute)
 		})
 	}
 }
@@ -61,16 +61,13 @@ func TestNewTimeOfDay_FullFormat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := NewTimeOfDay(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewTimeOfDay() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				require.Error(t, err)
 				return
 			}
-			if err != nil {
-				return
-			}
-			if result.Hour != tt.hour || result.Minute != tt.minute {
-				t.Errorf("NewTimeOfDay() = (%d, %d), want (%d, %d)", result.Hour, result.Minute, tt.hour, tt.minute)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.hour, result.Hour)
+			assert.Equal(t, tt.minute, result.Minute)
 		})
 	}
 }
@@ -92,9 +89,7 @@ func TestTimeOfDay_ToDuration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tod := &TimeOfDay{Hour: tt.hour, Minute: tt.minute}
 			result := tod.ToDuration()
-			if result != tt.expected {
-				t.Errorf("ToDuration() = %v, want %v", result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -102,16 +97,12 @@ func TestTimeOfDay_ToDuration(t *testing.T) {
 func TestTimeOfDay_IsZero(t *testing.T) {
 	t.Run("Nil returns true", func(t *testing.T) {
 		var tod *TimeOfDay
-		if !tod.IsZero() {
-			t.Error("IsZero() = false, want true for nil")
-		}
+		assert.True(t, tod.IsZero())
 	})
 
 	t.Run("Non-nil returns false", func(t *testing.T) {
 		tod := &TimeOfDay{Hour: 12, Minute: 0}
-		if tod.IsZero() {
-			t.Error("IsZero() = true, want false for non-nil")
-		}
+		assert.False(t, tod.IsZero())
 	})
 }
 
@@ -130,16 +121,12 @@ func TestParseDate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := ParseDate(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseDate() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				require.Error(t, err)
 				return
 			}
-			if err != nil {
-				return
-			}
-			if result.IsZero() {
-				t.Error("ParseDate() returned zero time")
-			}
+			require.NoError(t, err)
+			assert.False(t, result.IsZero())
 		})
 	}
 }
@@ -159,8 +146,10 @@ func TestConfig_Validate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.Validate()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -182,8 +171,10 @@ func TestConfig_ValidateTimeRanges(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.ValidateTimeRanges()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateTimeRanges() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -203,8 +194,10 @@ func TestConfig_ValidateInterval(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.ValidateInterval()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateInterval() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
