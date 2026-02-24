@@ -267,8 +267,8 @@ func main() {
 
 	cmd.Flags().StringVarP(&config.InputDir, "input", "i", "", "Input Git repository directory (required)")
 	cmd.Flags().StringVarP(&config.OutputDir, "output", "o", "", "Output directory for rewritten repository (required)")
-	cmd.Flags().StringVar(&config.UserName, "user-name", "Mike Zimin", "New author name for all commits")
-	cmd.Flags().StringVar(&config.UserEmail, "user-email", "mikeziminio@gmail.com", "New author email for all commits")
+	cmd.Flags().StringVar(&config.UserName, "user-name", "Mike Zimin", "New author name for all commits (default: Mike Zimin)")
+	cmd.Flags().StringVar(&config.UserEmail, "user-email", "mikeziminio@gmail.com", "New author email for all commits (default: mikeziminio@gmail.com)")
 	cmd.Flags().Func("date-from", "Start date for rewriting (format: 2006-01-02 or 2006-01-02T15:04:05)", func(s string) error {
 		t, err := args.ParseDate(s)
 		if err != nil {
@@ -285,7 +285,7 @@ func main() {
 		config.DateTo = t
 		return nil
 	})
-	cmd.Flags().Func("time-from", "Start time for time slot filtering (format: 9, 09, 09:00, 23:50)", func(s string) error {
+	cmd.Flags().Func("time-from", "Start time for time slot filtering (format: 9, 09, 09:00, 23:50, default: 19:00)", func(s string) error {
 		t, err := args.NewTimeOfDay(s)
 		if err != nil {
 			return err
@@ -293,7 +293,7 @@ func main() {
 		config.TimeFrom = t
 		return nil
 	})
-	cmd.Flags().Func("time-to", "End time for time slot filtering (format: 9, 09, 09:00, 23:50, default: 23)", func(s string) error {
+	cmd.Flags().Func("time-to", "End time for time slot filtering (format: 9, 09, 09:00, 23:50, default: 23:59)", func(s string) error {
 		t, err := args.NewTimeOfDay(s)
 		if err != nil {
 			return err
