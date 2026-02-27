@@ -3,20 +3,19 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"git-time-machine/pkg/args"
 	"git-time-machine/pkg/date"
 	"git-time-machine/pkg/git"
-	"git-time-machine/pkg/writer"
 )
 
 type Processor struct {
-	config       *args.Config
-	reader       *git.Reader
-	outputWriter *writer.Writer
-	commits      []git.Commit
+	config  *args.Config
+	commits []git.Commit
 }
 
 func (p *Processor) Run() error {
@@ -24,19 +23,15 @@ func (p *Processor) Run() error {
 		return err
 	}
 
+	if err := p.copyRepo(); err != nil {
+		return err
+	}
+
 	if err := p.calculateNewDates(); err != nil {
 		return err
 	}
 
-	if err := p.createOutputRepo(); err != nil {
-		return err
-	}
-
-	if err := p.writeRewrittenCommits(); err != nil {
-		return err
-	}
-
-	if err := p.copyFiles(); err != nil {
+	if err := p.rewriteHistory(); err != nil {
 		return err
 	}
 
@@ -108,50 +103,79 @@ func (p *Processor) calculateNewDates() error {
 	return nil
 }
 
-func (p *Processor) createOutputRepo() error {
-	w := writer.NewWriter(p.config.OutputDir, p.config.Quiet)
-	if err := w.InitRepository(); err != nil {
-		return err
+func (p *Processor) copyRepo() error {
+	// Use git clone --local to properly copy the repository
+	cmd := exec.Command("git", "clone", "--local", p.config.InputDir, p.config.OutputDir)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to copy repository: %w, output: %s", err, string(output))
 	}
-	p.outputWriter = w
 	return nil
 }
 
-func (p *Processor) writeRewrittenCommits() error {
-	for i, commit := range p.commits {
-		author := commit.Author
-		email := commit.Email
-		if p.config.UserName != "" {
-			author = p.config.UserName
-		}
-		if p.config.UserEmail != "" {
-			email = p.config.UserEmail
+func (p *Processor) rewriteHistory() error {
+	// Get all commits in order (oldest first)
+	commitsCmd := exec.Command("git", "rev-list", "--reverse", "HEAD")
+	commitsCmd.Dir = p.config.OutputDir
+	commitOutput, err := commitsCmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to get commits: %w", err)
+	}
+	commitSHAs := strings.Split(strings.TrimSpace(string(commitOutput)), "\n")
+
+	// Create new commits with amended metadata
+	var newCommitSHAs []string
+	for i, oldSHA := range commitSHAs {
+		if i >= len(p.commits) {
+			break
 		}
 
-		sha, err := p.outputWriter.CreateCommit(author, email, commit.NewDate, commit.Message)
+		commit := p.commits[i]
+		dateStr := commit.NewDate.Format("Mon Jan 2 15:04:05 2006 -0700")
+
+		// Get the tree of the original commit
+		treeCmd := exec.Command("git", "rev-parse", oldSHA+"^{tree}")
+		treeCmd.Dir = p.config.OutputDir
+		treeHash, err := treeCmd.Output()
 		if err != nil {
-			return fmt.Errorf("failed to create commit %d: %w", i+1, err)
+			return fmt.Errorf("failed to get tree hash for commit %s: %w, output: %s", oldSHA, err, string(treeHash))
+		}
+		treeHashStr := strings.TrimSpace(string(treeHash))
+
+		// Create new commit with same tree but new metadata
+		env := append(os.Environ(),
+			"GIT_AUTHOR_DATE="+dateStr,
+			"GIT_COMMITTER_DATE="+dateStr,
+			"GIT_AUTHOR_NAME="+p.config.UserName,
+			"GIT_AUTHOR_EMAIL="+p.config.UserEmail,
+			"GIT_COMMITTER_NAME="+p.config.UserName,
+			"GIT_COMMITTER_EMAIL="+p.config.UserEmail,
+		)
+
+		args := []string{"commit-tree", treeHashStr, "-m", commit.Message}
+		if i > 0 {
+			args = append(args, "-p", newCommitSHAs[i-1])
 		}
 
-		if !p.config.Quiet {
-			fmt.Printf("%s --> %s (author: %s / %s, date: %s --> %s)\n",
-				commit.SHA[:12],
-				sha[:12],
-				commit.Author,
-				author,
-				commit.Date[:25],
-				commit.NewDate.Format("2006-01-02"),
-			)
+		commitCmd := exec.Command("git", args...)
+		commitCmd.Dir = p.config.OutputDir
+		commitCmd.Env = env
+		newSHA, err := commitCmd.Output()
+		if err != nil {
+			return fmt.Errorf("failed to create commit %d (tree=%s): %w", i+1, treeHashStr, err)
+		}
+		newCommitSHAs = append(newCommitSHAs, strings.TrimSpace(string(newSHA)))
+	}
+
+	// Update HEAD to point to the new last commit
+	if len(newCommitSHAs) > 0 {
+		checkoutCmd := exec.Command("git", "checkout", "-B", "master", newCommitSHAs[len(newCommitSHAs)-1])
+		checkoutCmd.Dir = p.config.OutputDir
+		if err := checkoutCmd.Run(); err != nil {
+			return fmt.Errorf("failed to update HEAD: %w", err)
 		}
 	}
 
-	return nil
-}
-
-func (p *Processor) copyFiles() error {
-	if err := p.outputWriter.CopyFiles(p.config.InputDir); err != nil {
-		return fmt.Errorf("failed to copy files: %w", err)
-	}
 	return nil
 }
 
